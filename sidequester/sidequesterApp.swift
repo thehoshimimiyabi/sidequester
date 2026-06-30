@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct TARDISApp: App {
+struct sidequesterApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
