@@ -7,15 +7,30 @@
 
 import SwiftUI
 import SwiftData
+import FirebaseFirestore
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @State private var suggestedActivity = "Press Generate Activity to begin!"
+    @State private var activities: [String] = [
+        "Take a nature walk and photograph five interesting things you find.",
+        "Visit a local library and choose a random book to read for 20 minutes.",
+        "Learn to fold an origami crane using paper you have at home.",
+        "Try sketching an object on your desk for 10 minutes.",
+        "Cook a simple snack or meal you've never made before.",
+        "Play a board game or card game with someone nearby.",
+        "Spend 15 minutes learning basic phrases in a new language.",
+        "Explore a nearby park and identify three different plants or animals.",
+        "Write a short story using only 100 words.",
+        "Build something creative using household items."
+    ]
+    @State private var newActivity = ""
+
+    let db = Firestore.firestore()
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                Text("TARDIS")
+                Text("SideQuester")
                     .font(.largeTitle)
                     .fontWeight(.bold)
 
@@ -36,6 +51,7 @@ struct ContentView: View {
                 .padding(.horizontal)
 
                 Button("Generate Activity") {
+                    suggestedActivity = activities.randomElement() ?? "No activities available"
                 }
                 .buttonStyle(.borderedProminent)
 
@@ -43,7 +59,7 @@ struct ContentView: View {
                     Text("Suggested Activity")
                         .font(.headline)
 
-                    Text("Try a nature walk at a nearby park and take photos of five interesting things you spot.")
+                    Text(suggestedActivity)
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(.green.opacity(0.15))
@@ -51,8 +67,73 @@ struct ContentView: View {
                 }
                 .padding(.horizontal)
 
+                Divider()
+
+                TextField("Add a new activity", text: $newActivity)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+
+                Button("Add Activity") {
+                    guard !newActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        return
+                    }
+
+                    db.collection("activities").addDocument(data: [
+                        "name": newActivity,
+                        "createdAt": Timestamp(date: Date())
+                    ]) { error in
+                        if let error = error {
+                            print("Failed to save activity: \(error.localizedDescription)")
+                        }
+                    }
+
+                    newActivity = ""
+                }
+                .buttonStyle(.borderedProminent)
+
+                List(activities, id: \.self) { activity in
+                    Text(activity)
+                }
+                .frame(height: 200)
+
                 Spacer()
             }
+            .padding()
+            .navigationTitle("SideQuester")
+        }
+        .onAppear {
+            db.collection("activities")
+                .order(by: "createdAt")
+                .addSnapshotListener { snapshot, error in
+                    if let error = error {
+                        print("Firestore error: \(error.localizedDescription)")
+                        return
+                    }
+
+                    guard let documents = snapshot?.documents else {
+                        return
+                    }
+
+                    activities = [
+                        "Take a nature walk and photograph five interesting things you find.",
+                        "Visit a local library and choose a random book to read for 20 minutes.",
+                        "Learn to fold an origami crane using paper you have at home.",
+                        "Try sketching an object on your desk for 10 minutes.",
+                        "Cook a simple snack or meal you've never made before.",
+                        "Play a board game or card game with someone nearby.",
+                        "Spend 15 minutes learning basic phrases in a new language.",
+                        "Explore a nearby park and identify three different plants or animals.",
+                        "Write a short story using only 100 words.",
+                        "Build something creative using household items."
+                    ]
+
+                    for document in documents {
+                        if let name = document.data()["name"] as? String,
+                           !activities.contains(name) {
+                            activities.append(name)
+                        }
+                    }
+                }
         }
     }
 }
