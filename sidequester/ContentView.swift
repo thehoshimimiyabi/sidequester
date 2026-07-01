@@ -9,97 +9,68 @@ import SwiftUI
 import SwiftData
 import FirebaseFirestore
 
-struct ContentView: View {
-    @State private var suggestedActivity = "Press Generate Activity to begin!"
-    @State private var activities: [String] = [
-        "Take a nature walk and photograph five interesting things you find.",
-        "Visit a local library and choose a random book to read for 20 minutes.",
-        "Learn to fold an origami crane using paper you have at home.",
-        "Try sketching an object on your desk for 10 minutes.",
-        "Cook a simple snack or meal you've never made before.",
-        "Play a board game or card game with someone nearby.",
-        "Spend 15 minutes learning basic phrases in a new language.",
-        "Explore a nearby park and identify three different plants or animals.",
-        "Write a short story using only 100 words.",
-        "Build something creative using household items."
-    ]
-    @State private var newActivity = ""
+struct Activity: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let age: String
+    let physical: String
+    let cost: String
+    let shelter: String
+    let time: String
+    let points: Int
+}
 
+enum AppTab {
+    case home
+    case points
+    case leaderboard
+    case achievements
+    case search
+}
+
+struct ContentView: View {
+    @State private var userPoints = 0
+    @State private var activities: [Activity] = [
+        Activity(id: UUID().uuidString, name: "Go explore the neighbouring block/estate", age: "Any", physical: "Low", cost: "Free", shelter: "Outdoor", time: "15-30 mins", points: 10),
+        Activity(id: UUID().uuidString, name: "Walk along the footpath until you are tired", age: "Any", physical: "Moderate", cost: "Free", shelter: "Outdoor", time: "30-60 mins", points: 15),
+        Activity(id: UUID().uuidString, name: "Buy a meal from the closest coffee shop/hawker", age: "Any", physical: "Low", cost: "$", shelter: "Indoor", time: "15-30 mins", points: 10),
+        Activity(id: UUID().uuidString, name: "Check out the neighbourhood playground", age: "Kids", physical: "Moderate", cost: "Free", shelter: "Outdoor", time: "15-30 mins", points: 15),
+        Activity(id: UUID().uuidString, name: "Visit your childhood playground", age: "Teens", physical: "Low", cost: "Free", shelter: "Outdoor", time: "15-30 mins", points: 20),
+        Activity(id: UUID().uuidString, name: "Explore a neighbouring estate", age: "Any", physical: "Moderate", cost: "Free", shelter: "Outdoor", time: "30-60 mins", points: 20),
+        Activity(id: UUID().uuidString, name: "Walk to the closest mall", age: "Any", physical: "Low", cost: "Free", shelter: "Both", time: "15-30 mins", points: 15),
+        Activity(id: UUID().uuidString, name: "Take the next bus for a random amount of stops and explore the area", age: "Teens", physical: "Moderate", cost: "$", shelter: "Both", time: "1hr+", points: 30),
+        Activity(id: UUID().uuidString, name: "Check out a new shop/supermarket", age: "Any", physical: "Low", cost: "$", shelter: "Indoor", time: "15-30 mins", points: 10)
+    ]
     let db = Firestore.firestore()
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text("SideQuester")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-
-                Text("Discover something new away from endless scrolling")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
-
-                VStack(spacing: 12) {
-                    Label("Low Energy", systemImage: "battery.25")
-                    Label("30 Minutes Free", systemImage: "clock")
-                    Label("2-4 People", systemImage: "person.3")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.gray.opacity(0.1))
-                .cornerRadius(16)
-                .padding(.horizontal)
-
-                Button("Generate Activity") {
-                    suggestedActivity = activities.randomElement() ?? "No activities available"
-                }
-                .buttonStyle(.borderedProminent)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Suggested Activity")
-                        .font(.headline)
-
-                    Text(suggestedActivity)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.green.opacity(0.15))
-                        .cornerRadius(16)
-                }
-                .padding(.horizontal)
-
-                Divider()
-
-                TextField("Add a new activity", text: $newActivity)
-                    .textFieldStyle(.roundedBorder)
-                    .padding(.horizontal)
-
-                Button("Add Activity") {
-                    guard !newActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                        return
+            TabView {
+                HomeView(activities: activities)
+                    .tabItem {
+                        Label("Home", systemImage: "house.fill")
                     }
 
-                    db.collection("activities").addDocument(data: [
-                        "name": newActivity,
-                        "createdAt": Timestamp(date: Date())
-                    ]) { error in
-                        if let error = error {
-                            print("Failed to save activity: \(error.localizedDescription)")
-                        }
+                PointsView(userPoints: userPoints)
+                    .tabItem {
+                        Label("Points", systemImage: "star.fill")
                     }
 
-                    newActivity = ""
-                }
-                .buttonStyle(.borderedProminent)
+                LeaderboardView()
+                    .tabItem {
+                        Label("Friends", systemImage: "person.3.fill")
+                    }
 
-                List(activities, id: \.self) { activity in
-                    Text(activity)
-                }
-                .frame(height: 200)
+                AchievementsView(userPoints: userPoints)
+                    .tabItem {
+                        Label("Achievements", systemImage: "trophy.fill")
+                    }
 
-                Spacer()
+                ActivitySearchView(activities: activities)
+                    .tabItem {
+                        Label("Activities", systemImage: "magnifyingglass")
+                    }
             }
-            .padding()
-            .navigationTitle("SideQuester")
         }
         .onAppear {
             db.collection("activities")
@@ -114,24 +85,23 @@ struct ContentView: View {
                         return
                     }
 
-                    activities = [
-                        "Take a nature walk and photograph five interesting things you find.",
-                        "Visit a local library and choose a random book to read for 20 minutes.",
-                        "Learn to fold an origami crane using paper you have at home.",
-                        "Try sketching an object on your desk for 10 minutes.",
-                        "Cook a simple snack or meal you've never made before.",
-                        "Play a board game or card game with someone nearby.",
-                        "Spend 15 minutes learning basic phrases in a new language.",
-                        "Explore a nearby park and identify three different plants or animals.",
-                        "Write a short story using only 100 words.",
-                        "Build something creative using household items."
-                    ]
+                    activities.removeAll()
 
                     for document in documents {
-                        if let name = document.data()["name"] as? String,
-                           !activities.contains(name) {
-                            activities.append(name)
-                        }
+                        let data = document.data()
+
+                        let activity = Activity(
+                            id: document.documentID,
+                            name: data["name"] as? String ?? "",
+                            age: data["age"] as? String ?? "Any",
+                            physical: data["physical"] as? String ?? "Low",
+                            cost: data["cost"] as? String ?? "Free",
+                            shelter: data["shelter"] as? String ?? "Outdoor",
+                            time: data["time"] as? String ?? "15-30 mins",
+                            points: data["points"] as? Int ?? 10
+                        )
+
+                        activities.append(activity)
                     }
                 }
         }
