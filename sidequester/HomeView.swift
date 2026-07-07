@@ -4,7 +4,19 @@ struct HomeView: View {
     let activities: [Activity]
 
     var recommendations: [Activity] {
-        Array(activities.shuffled().prefix(3))
+        let filtered = activities.filter {
+            $0.name != "Firebase connection successful 🎉"
+        }
+
+        return Array(filtered.shuffled().prefix(3))
+    }
+
+    var trendingActivities: [Activity] {
+        let filtered = activities.filter {
+            $0.name != "Firebase connection successful 🎉"
+        }
+
+        return Array(filtered.shuffled().prefix(3))
     }
 
     var body: some View {
@@ -24,7 +36,7 @@ struct HomeView: View {
                 Text("🔥 Trending")
                     .font(.title2.bold())
 
-                ForEach(recommendations) { activity in
+                ForEach(trendingActivities) { activity in
                     ActivityCard(activity: activity)
                 }
             }

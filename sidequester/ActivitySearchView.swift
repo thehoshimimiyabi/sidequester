@@ -1,11 +1,14 @@
-
 import SwiftUI
+import FirebaseFirestore
 
 struct ActivitySearchView: View {
     let activities: [Activity]
 
     @State private var searchText = ""
     @State private var showingAddSheet = false
+    @State private var activityToDelete: Activity?
+    @State private var activityToEdit: Activity?
+    private let db = Firestore.firestore()
 
     @State private var selectedAge = "Any"
     @State private var selectedEffort = "Any"
@@ -86,6 +89,19 @@ struct ActivitySearchView: View {
 
                     ForEach(filteredActivities) { activity in
                         ActivityCard(activity: activity)
+                            .contextMenu {
+                                Button {
+                                    activityToEdit = activity
+                                } label: {
+                                    Label("Edit Activity", systemImage: "pencil")
+                                }
+
+                                Button(role: .destructive) {
+                                    activityToDelete = activity
+                                } label: {
+                                    Label("Delete Activity", systemImage: "trash")
+                                }
+                            }
                     }
                 }
                 .padding()
@@ -94,16 +110,210 @@ struct ActivitySearchView: View {
             .sheet(isPresented: $showingAddSheet) {
                 AddActivityView()
             }
+            .sheet(isPresented: Binding(
+                get: { activityToEdit != nil },
+                set: { if !$0 { activityToEdit = nil } }
+            )) {
+                if let activity = activityToEdit {
+                    EditActivityView(activity: activity)
+                }
+            }
+            .confirmationDialog(
+                "Delete Activity?",
+                isPresented: Binding(
+                    get: { activityToDelete != nil },
+                    set: { if !$0 { activityToDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let activity = activityToDelete {
+                        db.collection("activities").document(activity.id).delete { error in
+                            if let error = error {
+                                print("Failed to delete activity: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                    activityToDelete = nil
+                }
+
+                Button("Cancel", role: .cancel) {
+                    activityToDelete = nil
+                }
+            } message: {
+                if let activity = activityToDelete {
+                    Text("Delete '\(activity.name)' from Firestore?")
+                }
+            }
         }
     }
 }
 
 struct AddActivityView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let db = Firestore.firestore()
+
+    @State private var name = ""
+    @State private var requirement = ""
+    @State private var description = ""
+
+    @State private var age = "Any"
+    @State private var physical = "Low"
+    @State private var cost = "Free"
+    @State private var shelter = "Outdoor"
+    @State private var time = "15-30 mins"
+
+    let ages = ["Any", "Kids", "Teens", "Adults", "Seniors"]
+    let physicalLevels = ["Low", "Moderate", "High"]
+    let costs = ["Free", "$", "$$", "$$$"]
+    let shelters = ["Indoor", "Outdoor", "Both"]
+    let times = ["<15 mins", "15-30 mins", "30-60 mins", "1hr+"]
+
     var body: some View {
         NavigationStack {
-            Text("Add Activity Coming Soon")
-                .font(.title2)
-                .navigationTitle("New Activity")
+            Form {
+                Section("Activity") {
+                    TextField("Activity Name", text: $name)
+                    TextField("Description", text: $description, axis: .vertical)
+                    TextField("Requirement", text: $requirement)
+                }
+
+                Section("Filters") {
+                    Picker("Age", selection: $age) {
+                        ForEach(ages, id: \.self) { Text($0) }
+                    }
+                    Picker("Physical Activity", selection: $physical) {
+                        ForEach(physicalLevels, id: \.self) { Text($0) }
+                    }
+                    Picker("Cost", selection: $cost) {
+                        ForEach(costs, id: \.self) { Text($0) }
+                    }
+                    Picker("Shelter", selection: $shelter) {
+                        ForEach(shelters, id: \.self) { Text($0) }
+                    }
+                    Picker("Time", selection: $time) {
+                        ForEach(times, id: \.self) { Text($0) }
+                    }
+                }
+
+                Button("Submit Activity") {
+                    let points: Int
+                    switch physical {
+                    case "High":
+                        points = 30
+                    case "Moderate":
+                        points = 20
+                    default:
+                        points = 10
+                    }
+
+                    db.collection("activities").addDocument(data: [
+                        "name": name,
+                        "description": description,
+                        "age": age,
+                        "physical": physical,
+                        "cost": cost,
+                        "shelter": shelter,
+                        "time": time,
+                        "requirement": requirement,
+                        "points": points,
+                        "createdAt": Timestamp(date: Date())
+                    ]) { error in
+                        if let error = error {
+                            print("Failed to add activity: \(error.localizedDescription)")
+                        } else {
+                            dismiss()
+                        }
+                    }
+                }
+                .disabled(name.isEmpty)
+            }
+            .navigationTitle("Add Activity")
+        }
+    }
+}
+
+struct EditActivityView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let db = Firestore.firestore()
+
+    let activity: Activity
+
+    @State private var name: String
+    @State private var description: String
+    @State private var requirement: String
+    @State private var age: String
+    @State private var physical: String
+    @State private var cost: String
+    @State private var shelter: String
+    @State private var time: String
+
+    let ages = ["Any", "Kids", "Teens", "Adults", "Seniors"]
+    let physicalLevels = ["Low", "Moderate", "High"]
+    let costs = ["Free", "$", "$$", "$$$"]
+    let shelters = ["Indoor", "Outdoor", "Both"]
+    let times = ["<15 mins", "15-30 mins", "30-60 mins", "1hr+"]
+
+    init(activity: Activity) {
+        self.activity = activity
+        _name = State(initialValue: activity.name)
+        _description = State(initialValue: "")
+        _requirement = State(initialValue: activity.requirement)
+        _age = State(initialValue: activity.age)
+        _physical = State(initialValue: activity.physical)
+        _cost = State(initialValue: activity.cost)
+        _shelter = State(initialValue: activity.shelter)
+        _time = State(initialValue: activity.time)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Activity") {
+                    TextField("Activity Name", text: $name)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .lineLimit(3...6)
+                    TextField("Requirement", text: $requirement)
+                }
+
+                Section("Filters") {
+                    Picker("Age", selection: $age) {
+                        ForEach(ages, id: \.self) { Text($0) }
+                    }
+                    Picker("Physical Activity", selection: $physical) {
+                        ForEach(physicalLevels, id: \.self) { Text($0) }
+                    }
+                    Picker("Cost", selection: $cost) {
+                        ForEach(costs, id: \.self) { Text($0) }
+                    }
+                    Picker("Shelter", selection: $shelter) {
+                        ForEach(shelters, id: \.self) { Text($0) }
+                    }
+                    Picker("Time", selection: $time) {
+                        ForEach(times, id: \.self) { Text($0) }
+                    }
+                }
+
+                Button("Save Changes") {
+                    db.collection("activities").document(activity.id).updateData([
+                        "name": name,
+                        "description": description,
+                        "requirement": requirement,
+                        "age": age,
+                        "physical": physical,
+                        "cost": cost,
+                        "shelter": shelter,
+                        "time": time
+                    ]) { error in
+                        if let error = error {
+                            print("Failed to edit activity: \(error.localizedDescription)")
+                        } else {
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Edit Activity")
         }
     }
 }

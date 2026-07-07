@@ -20,14 +20,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let db = Firestore.firestore()
 
         // Test Firestore connection on launch
-        db.collection("activities").addDocument(data: [
-            "name": "Firebase connection successful 🎉",
-            "createdAt": Timestamp(date: Date())
+        db.collection("connect").document("status").setData([
+            "message": "Firebase connection successful 🎉",
+            "connectedAt": Timestamp(date: Date())
         ]) { error in
             if let error = error {
-                print("Firestore write failed: \(error.localizedDescription)")
+                print("Firestore connection test failed: \(error.localizedDescription)")
             } else {
-                print("Firestore write succeeded!")
+                print("Firestore connection test succeeded!")
             }
         }
 
