@@ -15,12 +15,14 @@ struct ActivitySearchView: View {
     @State private var selectedTime = "Any"
     @State private var selectedCost = "Any"
     @State private var selectedShelter = "Any"
+    @State private var selectedCompleted = "Any"
 
     let ageOptions = ["Any", "Kids", "Teens", "Adults", "Seniors"]
     let effortOptions = ["Any", "Low", "Moderate", "High"]
     let timeOptions = ["Any", "<15 mins", "15-30 mins", "30-60 mins", "1 hour+"]
     let costOptions = ["Any", "Free", "$", "$$", "$$$"]
     let shelterOptions = ["Any", "Indoor", "Outdoor", "Both"]
+    let completedOptions = ["Any", "0-10", "11-50", "51-100", "100+"]
 
     var filteredActivities: [Activity] {
         activities.filter { activity in
@@ -29,7 +31,8 @@ struct ActivitySearchView: View {
             (selectedEffort == "Any" || activity.physical == selectedEffort) &&
             (selectedTime == "Any" || activity.time == selectedTime) &&
             (selectedCost == "Any" || activity.cost == selectedCost) &&
-            (selectedShelter == "Any" || activity.shelter == selectedShelter)
+            (selectedShelter == "Any" || activity.shelter == selectedShelter) &&
+            selectedCompleted == "Any"
         }
     }
 
@@ -83,6 +86,13 @@ struct ActivitySearchView: View {
                             .font(.headline)
                         Picker("Shelter", selection: $selectedShelter) {
                             ForEach(shelterOptions, id: \.self) { Text($0) }
+                        }
+                        .pickerStyle(.menu)
+
+                        Text("Completed By")
+                            .font(.headline)
+                        Picker("Completed By", selection: $selectedCompleted) {
+                            ForEach(completedOptions, id: \.self) { Text($0) }
                         }
                         .pickerStyle(.menu)
                     }
@@ -156,6 +166,7 @@ struct AddActivityView: View {
     @State private var name = ""
     @State private var requirement = ""
     @State private var description = ""
+    @State private var completedCount = 0
 
     @State private var age = "Any"
     @State private var physical = "Low"
@@ -176,6 +187,7 @@ struct AddActivityView: View {
                     TextField("Activity Name", text: $name)
                     TextField("Description", text: $description, axis: .vertical)
                     TextField("Requirement", text: $requirement)
+                    Stepper("Completed: \(completedCount)", value: $completedCount, in: 0...10000)
                 }
 
                 Section("Filters") {
@@ -217,6 +229,7 @@ struct AddActivityView: View {
                         "time": time,
                         "requirement": requirement,
                         "points": points,
+                        "completedCount": completedCount,
                         "createdAt": Timestamp(date: Date())
                     ]) { error in
                         if let error = error {
@@ -247,6 +260,7 @@ struct EditActivityView: View {
     @State private var cost: String
     @State private var shelter: String
     @State private var time: String
+    @State private var completedCount: Int
 
     let ages = ["Any", "Kids", "Teens", "Adults", "Seniors"]
     let physicalLevels = ["Low", "Moderate", "High"]
@@ -264,6 +278,7 @@ struct EditActivityView: View {
         _cost = State(initialValue: activity.cost)
         _shelter = State(initialValue: activity.shelter)
         _time = State(initialValue: activity.time)
+        _completedCount = State(initialValue: 0)
     }
 
     var body: some View {
@@ -274,6 +289,7 @@ struct EditActivityView: View {
                     TextField("Description", text: $description, axis: .vertical)
                         .lineLimit(3...6)
                     TextField("Requirement", text: $requirement)
+                    Stepper("Completed: \(completedCount)", value: $completedCount, in: 0...10000)
                 }
 
                 Section("Filters") {
@@ -303,7 +319,8 @@ struct EditActivityView: View {
                         "physical": physical,
                         "cost": cost,
                         "shelter": shelter,
-                        "time": time
+                        "time": time,
+                        "completedCount": completedCount,
                     ]) { error in
                         if let error = error {
                             print("Failed to edit activity: \(error.localizedDescription)")

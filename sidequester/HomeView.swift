@@ -12,35 +12,43 @@ struct HomeView: View {
     }
 
     var trendingActivities: [Activity] {
-        let filtered = activities.filter {
-            $0.name != "Firebase connection successful 🎉"
-        }
-
-        return Array(filtered.shuffled().prefix(3))
+        activities
+            .filter { $0.name != "Firebase connection successful 🎉" }
+            .sorted { $0.points > $1.points }
+            .prefix(5)
+            .map { $0 }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
 
-                Text("Welcome back 👋")
-                    .font(.largeTitle.bold())
+                    Text("Welcome back 👋")
+                        .font(.largeTitle.bold())
 
-                Text("Recommended For You")
-                    .font(.title2.bold())
+                    Text("Recommended For You")
+                        .font(.title2.bold())
 
-                ForEach(recommendations) { activity in
-                    ActivityCard(activity: activity)
+                    ForEach(recommendations) { activity in
+                        NavigationLink(destination: ActivityDetailView(activity: activity)) {
+                            ActivityCard(activity: activity)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Text("🔥 Trending")
+                        .font(.title2.bold())
+
+                    ForEach(trendingActivities) { activity in
+                        NavigationLink(destination: ActivityDetailView(activity: activity)) {
+                            ActivityCard(activity: activity)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-
-                Text("🔥 Trending")
-                    .font(.title2.bold())
-
-                ForEach(trendingActivities) { activity in
-                    ActivityCard(activity: activity)
-                }
+                .padding()
             }
-            .padding()
         }
     }
 }

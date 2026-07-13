@@ -8,6 +8,15 @@ struct ActivityCard: View {
             Text(activity.name)
                 .font(.headline)
 
+            HStack(spacing: 6) {
+                Image(systemName: "person.2.fill")
+                    .foregroundStyle(.secondary)
+
+                Text("\(activity.completedCount) completed")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack {
                 Label("\(activity.points) pts", systemImage: "star.fill")
                 Label(activity.time, systemImage: "clock")
