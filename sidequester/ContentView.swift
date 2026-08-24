@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import Combine
 import SwiftData
 import FirebaseFirestore
 import FirebaseAuth
+
+// MARK: - Activity Model
 
 struct Activity: Identifiable, Hashable {
     let id: String
@@ -24,74 +27,403 @@ struct Activity: Identifiable, Hashable {
     let completedCount: Int
 }
 
-enum AppTab {
-    case home
-    case points
-    case leaderboard
-    case achievements
-    case search
+// MARK: - App Theme
+
+enum AppThemeColor: String, CaseIterable, Identifiable {
+    case blue
+    case purple
+    case pink
+    case orange
+    case green
+    case teal
+    case red
+
+    var id: String { rawValue }
+
+    var color: Color {
+        switch self {
+        case .blue: return .blue
+        case .purple: return .purple
+        case .pink: return .pink
+        case .orange: return .orange
+        case .green: return .green
+        case .teal: return .teal
+        case .red: return .red
+        }
+    }
+
+    var displayName: String {
+        rawValue.capitalized
+    }
 }
 
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+}
+
+@MainActor
+final class AppCustomization: ObservableObject {
+    @AppStorage("glassOpacity") var glassOpacity: Double = 0.72
+    @AppStorage("glassBlur") var glassBlur: Double = 18
+    @AppStorage("glassCornerRadius") var glassCornerRadius: Double = 26
+    @AppStorage("glassBorderOpacity") var glassBorderOpacity: Double = 0.30
+    @AppStorage("glassShadowOpacity") var glassShadowOpacity: Double = 0.10
+    @AppStorage("backgroundOpacity") var backgroundOpacity: Double = 0.10
+    @AppStorage("accentColorRaw") private var accentColorRaw = AppThemeColor.blue.rawValue
+    @AppStorage("appearanceRaw") private var appearanceRaw = AppAppearance.system.rawValue
+
+    var accentColor: AppThemeColor {
+        get { AppThemeColor(rawValue: accentColorRaw) ?? .blue }
+        set {
+            objectWillChange.send()
+            accentColorRaw = newValue.rawValue
+        }
+    }
+
+    var appearance: AppAppearance {
+        get { AppAppearance(rawValue: appearanceRaw) ?? .system }
+        set {
+            objectWillChange.send()
+            appearanceRaw = newValue.rawValue
+        }
+    }
+
+    func reset() {
+        glassOpacity = 0.72
+        glassBlur = 18
+        glassCornerRadius = 26
+        glassBorderOpacity = 0.30
+        glassShadowOpacity = 0.10
+        backgroundOpacity = 0.10
+        accentColorRaw = AppThemeColor.blue.rawValue
+        appearanceRaw = AppAppearance.system.rawValue
+    }
+}
+
+// MARK: - Glass Helpers
+
+struct GlassCard<Content: View>: View {
+    @EnvironmentObject private var customization: AppCustomization
+
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(20)
+            .background(
+                .ultraThinMaterial.opacity(customization.glassOpacity),
+                in: RoundedRectangle(
+                    cornerRadius: customization.glassCornerRadius,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: customization.glassCornerRadius,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    .white.opacity(customization.glassBorderOpacity),
+                    lineWidth: 1
+                )
+            }
+            .shadow(
+                color: .black.opacity(customization.glassShadowOpacity),
+                radius: customization.glassBlur,
+                y: customization.glassBlur / 2
+            )
+    }
+}
+
+struct GlassInput<Content: View>: View {
+    @EnvironmentObject private var customization: AppCustomization
+
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(.horizontal, 16)
+            .padding(.vertical, 15)
+            .background(
+                .thinMaterial.opacity(customization.glassOpacity),
+                in: RoundedRectangle(
+                    cornerRadius: 17,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: 17,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    .white.opacity(customization.glassBorderOpacity),
+                    lineWidth: 1
+                )
+            }
+    }
+}
+
+// MARK: - Content View
+
 struct ContentView: View {
+    @StateObject private var customization = AppCustomization()
+
     @State private var userPoints = 0
     @State private var isLoggedIn = Auth.auth().currentUser != nil
+
     @State private var activities: [Activity] = [
-        Activity(id: UUID().uuidString, name: "Go explore the neighbouring block/estate", description: "", age: "Any", physical: "Low", cost: "Free", shelter: "Outdoor", time: "15-30 mins", requirement: "None", points: 10, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Walk along the footpath until you are tired", description: "", age: "Any", physical: "Moderate", cost: "Free", shelter: "Outdoor", time: "30-60 mins", requirement: "None", points: 15, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Buy a meal from the closest coffee shop/hawker", description: "", age: "Any", physical: "Low", cost: "$", shelter: "Indoor", time: "15-30 mins", requirement: "None", points: 10, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Check out the neighbourhood playground", description: "", age: "Kids", physical: "Moderate", cost: "Free", shelter: "Outdoor", time: "15-30 mins", requirement: "None", points: 15, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Visit your childhood playground", description: "", age: "Teens", physical: "Low", cost: "Free", shelter: "Outdoor", time: "15-30 mins", requirement: "None", points: 20, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Explore a neighbouring estate", description: "", age: "Any", physical: "Moderate", cost: "Free", shelter: "Outdoor", time: "30-60 mins", requirement: "None", points: 20, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Walk to the closest mall", description: "", age: "Any", physical: "Low", cost: "Free", shelter: "Both", time: "15-30 mins", requirement: "None", points: 15, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Take the next bus for a random amount of stops and explore the area", description: "", age: "Teens", physical: "Moderate", cost: "$", shelter: "Both", time: "1hr+", requirement: "None", points: 30, completedCount: 0),
-        Activity(id: UUID().uuidString, name: "Check out a new shop/supermarket", description: "", age: "Any", physical: "Low", cost: "$", shelter: "Indoor", time: "15-30 mins", requirement: "None", points: 10, completedCount: 0)
+        Activity(
+            id: UUID().uuidString,
+            name: "Go explore the neighbouring block/estate",
+            description: "",
+            age: "Any",
+            physical: "Low",
+            cost: "Free",
+            shelter: "Outdoor",
+            time: "15-30 mins",
+            requirement: "None",
+            points: 10,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Walk along the footpath until you are tired",
+            description: "",
+            age: "Any",
+            physical: "Moderate",
+            cost: "Free",
+            shelter: "Outdoor",
+            time: "30-60 mins",
+            requirement: "None",
+            points: 15,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Buy a meal from the closest coffee shop/hawker",
+            description: "",
+            age: "Any",
+            physical: "Low",
+            cost: "$",
+            shelter: "Indoor",
+            time: "15-30 mins",
+            requirement: "None",
+            points: 10,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Check out the neighbourhood playground",
+            description: "",
+            age: "Kids",
+            physical: "Moderate",
+            cost: "Free",
+            shelter: "Outdoor",
+            time: "15-30 mins",
+            requirement: "None",
+            points: 15,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Visit your childhood playground",
+            description: "",
+            age: "Teens",
+            physical: "Low",
+            cost: "Free",
+            shelter: "Outdoor",
+            time: "15-30 mins",
+            requirement: "None",
+            points: 20,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Explore a neighbouring estate",
+            description: "",
+            age: "Any",
+            physical: "Moderate",
+            cost: "Free",
+            shelter: "Outdoor",
+            time: "30-60 mins",
+            requirement: "None",
+            points: 20,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Walk to the closest mall",
+            description: "",
+            age: "Any",
+            physical: "Low",
+            cost: "Free",
+            shelter: "Both",
+            time: "15-30 mins",
+            requirement: "None",
+            points: 15,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Take the next bus for a random amount of stops and explore the area",
+            description: "",
+            age: "Teens",
+            physical: "Moderate",
+            cost: "$",
+            shelter: "Both",
+            time: "1hr+",
+            requirement: "None",
+            points: 30,
+            completedCount: 0
+        ),
+        Activity(
+            id: UUID().uuidString,
+            name: "Check out a new shop/supermarket",
+            description: "",
+            age: "Any",
+            physical: "Low",
+            cost: "$",
+            shelter: "Indoor",
+            time: "15-30 mins",
+            requirement: "None",
+            points: 10,
+            completedCount: 0
+        )
     ]
-    let db = Firestore.firestore()
+
+    private let db = Firestore.firestore()
 
     var body: some View {
         NavigationStack {
-            if isLoggedIn {
-                TabView {
-                    HomeView(activities: activities)
-                        .tabItem { Label("Home", systemImage: "house.fill") }
-
-                    PointsView(userPoints: userPoints)
-                        .tabItem { Label("Points", systemImage: "star.fill") }
-
-                    LeaderboardView()
-                        .tabItem { Label("Friends", systemImage: "person.3.fill") }
-
-                    AchievementsView(userPoints: userPoints)
-                        .tabItem { Label("Achievements", systemImage: "trophy.fill") }
-
-                    ActivitySearchView(activities: activities)
-                        .tabItem { Label("Activities", systemImage: "magnifyingglass") }
-                }
-            } else {
-                LoginView()
+            ZStack {
+                background
+                loggedInContent
             }
         }
+        .environmentObject(customization)
+        .preferredColorScheme(colorScheme)
         .onAppear {
-            isLoggedIn = Auth.auth().currentUser != nil
-            db.collection("activities")
-                .order(by: "createdAt")
-                .addSnapshotListener { snapshot, error in
-                    if let error = error {
-                        print("Firestore error: \(error.localizedDescription)")
-                        return
+            loadActivities()
+        }
+    }
+
+    private var background: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(.systemBackground),
+                    customization.accentColor.color.opacity(customization.backgroundOpacity),
+                    Color.purple.opacity(customization.backgroundOpacity * 0.7)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            Circle()
+                .fill(customization.accentColor.color.opacity(0.08))
+                .frame(width: 280)
+                .blur(radius: 45)
+                .offset(x: -160, y: -300)
+
+            Circle()
+                .fill(Color.purple.opacity(0.08))
+                .frame(width: 300)
+                .blur(radius: 50)
+                .offset(x: 170, y: 280)
+        }
+    }
+
+    @ViewBuilder
+    private var loggedInContent: some View {
+        if isLoggedIn {
+            TabView {
+                HomeView(activities: activities)
+                    .tabItem {
+                        Label("Home", systemImage: "house.fill")
                     }
 
-                    guard let documents = snapshot?.documents else {
-                        return
+                PointsView(userPoints: userPoints)
+                    .tabItem {
+                        Label("Points", systemImage: "star.fill")
                     }
 
-                    // Refresh local activities with the latest data from Firestore.
-                    activities.removeAll()
+                LeaderboardView()
+                    .tabItem {
+                        Label("Friends", systemImage: "person.3.fill")
+                    }
 
-                    for document in documents {
-                        let data = document.data()
+                AchievementsView(userPoints: userPoints)
+                    .tabItem {
+                        Label("Achievements", systemImage: "trophy.fill")
+                    }
 
-                        let activity = Activity(
+                ActivitySearchView(activities: activities)
+                    .tabItem {
+                        Label("Activities", systemImage: "magnifyingglass")
+                    }
+            }
+            .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
+            .tint(customization.accentColor.color)
+        } else {
+            LoginView(onLoginSuccess: {
+                isLoggedIn = true
+            })
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private var colorScheme: ColorScheme? {
+        switch customization.appearance {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+
+    private func loadActivities() {
+        isLoggedIn = Auth.auth().currentUser != nil
+
+        db.collection("activities")
+            .order(by: "createdAt")
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("Firestore error: \(error.localizedDescription)")
+                    return
+                }
+
+                guard let documents = snapshot?.documents else {
+                    return
+                }
+
+                activities.removeAll()
+
+                for document in documents {
+                    let data = document.data()
+
+                    activities.append(
+                        Activity(
                             id: document.documentID,
                             name: data["name"] as? String ?? "",
                             description: data["description"] as? String ?? "",
@@ -104,17 +436,723 @@ struct ContentView: View {
                             points: data["points"] as? Int ?? 10,
                             completedCount: data["completedCount"] as? Int ?? 0
                         )
-
-                        activities.append(activity)
-                        // Each document should contain: name, age, physical, cost, shelter, time, requirement, points, createdAt.
-                    }
-                    activities.sort { $0.completedCount > $1.completedCount }
+                    )
                 }
-        }
+
+                activities.sort {
+                    $0.completedCount > $1.completedCount
+                }
+            }
     }
 }
 
+// MARK: - Username Helpers
+
+/// Normalizes a username the same way everywhere it's stored or queried, so
+/// lookups are consistent regardless of casing or stray whitespace.
+func normalizedUsername(_ raw: String) -> String {
+    raw
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        .filter { $0.isLetter || $0.isNumber }
+}
+
+// MARK: - Login View
+
+struct LoginView: View {
+    @EnvironmentObject private var customization: AppCustomization
+
+    var onLoginSuccess: () -> Void
+
+    // Shared
+    @State private var password = ""
+    @State private var isLoading = false
+    @State private var errorMessage = ""
+    @State private var showPassword = false
+    @State private var showForgotPassword = false
+    @State private var isCreatingAccount = false
+
+    // Log in
+    @State private var loginUsername = ""
+
+    // Sign up
+    @State private var signUpUsername = ""
+    @State private var email = ""
+    @State private var confirmPassword = ""
+
+    private let db = Firestore.firestore()
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 28) {
+                VStack(spacing: 12) {
+                    Image(systemName: "figure.walk.motion")
+                        .font(.system(size: 46, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    customization.accentColor.color,
+                                    .purple
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 90, height: 90)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay {
+                            Circle()
+                                .strokeBorder(
+                                    .white.opacity(customization.glassBorderOpacity),
+                                    lineWidth: 1
+                                )
+                        }
+                        .shadow(
+                            color: customization.accentColor.color.opacity(0.15),
+                            radius: 20,
+                            y: 8
+                        )
+
+                    Text("Sidequester")
+                        .font(.system(size: 34, weight: .bold))
+
+                    Text("Touch grass. Earn points. Have fun.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                GlassCard {
+                    VStack(spacing: 18) {
+                        Text(isCreatingAccount ? "Create your account" : "Welcome back")
+                            .font(.title2.bold())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if isCreatingAccount {
+                            GlassInput {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person")
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 20)
+
+                                    TextField("Username", text: $signUpUsername)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled()
+                                }
+                            }
+
+                            GlassInput {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "envelope")
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 20)
+
+                                    TextField("Email", text: $email)
+                                        .textInputAutocapitalization(.never)
+                                        .keyboardType(.emailAddress)
+                                        .autocorrectionDisabled()
+                                }
+                            }
+                        } else {
+                            GlassInput {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person")
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 20)
+
+                                    TextField("Username", text: $loginUsername)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled()
+                                }
+                            }
+                        }
+
+                        GlassInput {
+                            HStack(spacing: 12) {
+                                Image(systemName: "lock")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 20)
+
+                                Group {
+                                    if showPassword {
+                                        TextField("Password", text: $password)
+                                    } else {
+                                        SecureField("Password", text: $password)
+                                    }
+                                }
+
+                                Button {
+                                    showPassword.toggle()
+                                } label: {
+                                    Image(
+                                        systemName: showPassword
+                                            ? "eye.slash"
+                                            : "eye"
+                                    )
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+
+                        if isCreatingAccount {
+                            GlassInput {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "lock.rotation")
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 20)
+
+                                    SecureField("Confirm Password", text: $confirmPassword)
+                                }
+                            }
+                        }
+
+                        if !isCreatingAccount {
+                            Button {
+                                showForgotPassword = true
+                            } label: {
+                                Text("Forgot Password?")
+                                    .font(.footnote.weight(.semibold))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+
+                        if !errorMessage.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.circle.fill")
+
+                                Text(errorMessage)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        Button {
+                            isCreatingAccount ? signUp() : login()
+                        } label: {
+                            HStack {
+                                if isLoading {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: isCreatingAccount ? "person.badge.plus" : "arrow.right")
+                                    Text(isCreatingAccount ? "Create Account" : "Log In")
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                        }
+                        .foregroundStyle(.white)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    customization.accentColor.color,
+                                    .purple
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            in: RoundedRectangle(
+                                cornerRadius: 18,
+                                style: .continuous
+                            )
+                        )
+                        .disabled(isSubmitDisabled)
+                        .opacity(isSubmitDisabled ? 0.55 : 1)
+
+                        Button {
+                            withAnimation {
+                                isCreatingAccount.toggle()
+                                errorMessage = ""
+                                password = ""
+                                confirmPassword = ""
+                            }
+                        } label: {
+                            Text(
+                                isCreatingAccount
+                                    ? "Already have an account? Log In"
+                                    : "New here? Create an Account"
+                            )
+                            .font(.footnote.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 40)
+        }
+        .sheet(isPresented: $showForgotPassword) {
+            NavigationStack {
+                ForgotPasswordView()
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var isSubmitDisabled: Bool {
+        if isLoading { return true }
+
+        if isCreatingAccount {
+            return signUpUsername.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty
+        } else {
+            return loginUsername.isEmpty || password.isEmpty
+        }
+    }
+
+    /// Username-based login: looks up the email tied to the username in
+    /// Firestore, then signs in with Firebase Auth using that email.
+    private func login() {
+        let cleanUsername = normalizedUsername(loginUsername)
+
+        guard !cleanUsername.isEmpty, !password.isEmpty else {
+            return
+        }
+
+        isLoading = true
+        errorMessage = ""
+
+        db.collection("users")
+            .whereField("username", isEqualTo: cleanUsername)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    isLoading = false
+                    errorMessage = error.localizedDescription
+                    return
+                }
+
+                guard let userDoc = snapshot?.documents.first,
+                      let userEmail = userDoc.data()["email"] as? String else {
+                    isLoading = false
+                    errorMessage = "No account found with that username."
+                    return
+                }
+
+                Auth.auth().signIn(withEmail: userEmail, password: password) { result, error in
+                    isLoading = false
+
+                    if let error = error {
+                        errorMessage = error.localizedDescription
+                        return
+                    }
+
+                    if result?.user != nil {
+                        onLoginSuccess()
+                    }
+                }
+            }
+    }
+
+    private func signUp() {
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanUsername = normalizedUsername(signUpUsername)
+
+        guard !cleanUsername.isEmpty, !cleanEmail.isEmpty, !password.isEmpty else {
+            return
+        }
+
+        guard password == confirmPassword else {
+            errorMessage = "Passwords do not match."
+            return
+        }
+
+        isLoading = true
+        errorMessage = ""
+
+        // Make sure the username isn't already taken before creating the auth user.
+        db.collection("users")
+            .whereField("username", isEqualTo: cleanUsername)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    isLoading = false
+                    errorMessage = error.localizedDescription
+                    return
+                }
+
+                if let existing = snapshot?.documents, !existing.isEmpty {
+                    isLoading = false
+                    errorMessage = "That username is already taken."
+                    return
+                }
+
+                Auth.auth().createUser(withEmail: cleanEmail, password: password) { result, error in
+                    if let error = error {
+                        isLoading = false
+                        errorMessage = error.localizedDescription
+                        return
+                    }
+
+                    guard let user = result?.user else {
+                        isLoading = false
+                        return
+                    }
+
+                    db.collection("users").document(user.uid).setData([
+                        "username": cleanUsername,
+                        "email": cleanEmail,
+                        "points": 0,
+                        "streak": 0,
+                        "longestStreak": 0,
+                        "createdAt": Timestamp(date: Date()),
+                        "lifetimeCompletedActivities": 0,
+                        "activitiesCreated": 0,
+                        "completedActivities": [],
+                        "createdActivities": []
+                    ]) { error in
+                        isLoading = false
+
+                        if let error = error {
+                            errorMessage = error.localizedDescription
+                            return
+                        }
+
+                        onLoginSuccess()
+                    }
+                }
+            }
+    }
+}
+
+// MARK: - Forgot Password
+
+struct ForgotPasswordView: View {
+    @EnvironmentObject private var customization: AppCustomization
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var username = ""
+    @State private var email = ""
+    @State private var isSending = false
+    @State private var message = ""
+    @State private var showSuccess = false
+
+    private let db = Firestore.firestore()
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(.systemBackground),
+                    customization.accentColor.color.opacity(customization.backgroundOpacity),
+                    Color.purple.opacity(customization.backgroundOpacity * 0.7)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Image(systemName: "lock.rotation")
+                    .font(.system(size: 42, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                customization.accentColor.color,
+                                .purple
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 90, height: 90)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay {
+                        Circle()
+                            .strokeBorder(
+                                .white.opacity(customization.glassBorderOpacity),
+                                lineWidth: 1
+                            )
+                    }
+
+                VStack(spacing: 8) {
+                    Text("Forgot Password?")
+                        .font(.largeTitle.bold())
+
+                    Text("Enter your username and the email on your account. We'll check they match before sending a reset link.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                GlassCard {
+                    VStack(spacing: 16) {
+                        GlassInput {
+                            HStack(spacing: 12) {
+                                Image(systemName: "person")
+                                    .foregroundStyle(.secondary)
+
+                                TextField("Username", text: $username)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                            }
+                        }
+
+                        GlassInput {
+                            HStack(spacing: 12) {
+                                Image(systemName: "envelope")
+                                    .foregroundStyle(.secondary)
+
+                                TextField("Email on your account", text: $email)
+                                    .textInputAutocapitalization(.never)
+                                    .keyboardType(.emailAddress)
+                                    .autocorrectionDisabled()
+                            }
+                        }
+
+                        Button {
+                            verifyAndSendResetLink()
+                        } label: {
+                            HStack {
+                                if isSending {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: "paperplane.fill")
+                                    Text("Send Reset Link")
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                        }
+                        .foregroundStyle(.white)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    customization.accentColor.color,
+                                    .purple
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            in: RoundedRectangle(
+                                cornerRadius: 18,
+                                style: .continuous
+                            )
+                        )
+                        .disabled(
+                            username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                            email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                            isSending
+                        )
+                    }
+                }
+
+                if !message.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(
+                            systemName: showSuccess
+                                ? "checkmark.circle.fill"
+                                : "exclamationmark.circle.fill"
+                        )
+
+                        Text(message)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(showSuccess ? .green : .red)
+                    .padding(.horizontal)
+                }
+
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                        Text("Back to Login")
+                    }
+                    .font(.subheadline.weight(.medium))
+                }
+                .foregroundStyle(.secondary)
+            }
+            .padding(24)
+            .frame(maxWidth: 500)
+        }
+        .navigationTitle("Reset Password")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Looks up the username in Firestore, confirms the entered email matches
+    /// the email on file for that account, and only then triggers Firebase's
+    /// password reset email. This stops someone from firing off a reset email
+    /// for a username without also knowing the email tied to it.
+    private func verifyAndSendResetLink() {
+        let cleanUsername = normalizedUsername(username)
+        let enteredEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        guard !cleanUsername.isEmpty, !enteredEmail.isEmpty else {
+            return
+        }
+
+        isSending = true
+        message = ""
+        showSuccess = false
+
+        db.collection("users")
+            .whereField("username", isEqualTo: cleanUsername)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    isSending = false
+                    message = error.localizedDescription
+                    showSuccess = false
+                    return
+                }
+
+                guard let userDoc = snapshot?.documents.first,
+                      let storedEmail = userDoc.data()["email"] as? String else {
+                    isSending = false
+                    message = "No account found with that username."
+                    showSuccess = false
+                    return
+                }
+
+                guard storedEmail.lowercased() == enteredEmail else {
+                    isSending = false
+                    message = "That email doesn't match the one on this account."
+                    showSuccess = false
+                    return
+                }
+
+                Auth.auth().sendPasswordReset(withEmail: storedEmail) { error in
+                    isSending = false
+
+                    if let error = error {
+                        message = error.localizedDescription
+                        showSuccess = false
+                        return
+                    }
+
+                    message = "Password reset link sent! Check your email, including your spam folder."
+                    showSuccess = true
+                }
+            }
+    }
+}
+
+// MARK: - Customization Settings
+
+struct CustomizationView: View {
+    @EnvironmentObject private var customization: AppCustomization
+
+    var body: some View {
+        Form {
+            Section("Appearance") {
+                Picker("Mode", selection: Binding(
+                    get: { customization.appearance },
+                    set: { customization.appearance = $0 }
+                )) {
+                    ForEach(AppAppearance.allCases) { appearance in
+                        Text(appearance.displayName)
+                            .tag(appearance)
+                    }
+                }
+
+                Picker("Accent Color", selection: Binding(
+                    get: { customization.accentColor },
+                    set: { customization.accentColor = $0 }
+                )) {
+                    ForEach(AppThemeColor.allCases) { color in
+                        HStack {
+                            Circle()
+                                .fill(color.color)
+                                .frame(width: 14, height: 14)
+
+                            Text(color.displayName)
+                        }
+                        .tag(color)
+                    }
+                }
+            }
+
+            Section("Liquid Glass") {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("Glassiness")
+                        Spacer()
+                        Text("\(Int(customization.glassOpacity * 100))%")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: $customization.glassOpacity,
+                        in: 0.15...1.0
+                    )
+                }
+
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("Blur / Glow")
+                        Spacer()
+                        Text("\(Int(customization.glassBlur))")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: $customization.glassBlur,
+                        in: 0...45
+                    )
+                }
+
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("Corner Radius")
+                        Spacer()
+                        Text("\(Int(customization.glassCornerRadius))")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: $customization.glassCornerRadius,
+                        in: 8...45
+                    )
+                }
+
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("Glass Border")
+                        Spacer()
+                        Text("\(Int(customization.glassBorderOpacity * 100))%")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: $customization.glassBorderOpacity,
+                        in: 0...0.8
+                    )
+                }
+
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("Background Glow")
+                        Spacer()
+                        Text("\(Int(customization.backgroundOpacity * 100))%")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: $customization.backgroundOpacity,
+                        in: 0...0.30
+                    )
+                }
+            }
+
+            Section {
+                Button("Reset All Customization") {
+                    customization.reset()
+                }
+                .foregroundStyle(.red)
+            }
+        }
+        .navigationTitle("Customize")
+    }
+}
+
+// MARK: - Preview
+
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
